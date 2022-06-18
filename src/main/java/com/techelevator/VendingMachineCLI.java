@@ -1,10 +1,14 @@
 package com.techelevator;
 
 import com.techelevator.view.Menu;
+import org.w3c.dom.ls.LSOutput;
 //import com.techelevator.view.Purchasable;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.text.SimpleDateFormat;
+
+import java.time.LocalDateTime;
 import java.util.*;
 
 public class VendingMachineCLI {
@@ -19,11 +23,19 @@ public class VendingMachineCLI {
 	private static final String FINISH_TRANSACTION = "Finish Transaction";
 	private static final String[] PURCHASE_MENU_OPTIONS = { FEED_MONEY, SELECT_PRODUCT, FINISH_TRANSACTION};
 
+	private static final double QUARTERS_VALUE = 0.25;
+	private static final double DIMES_VALUE = 0.10;
+	private static final double NICKELS_VALUE = 0.05;
+
 	Map<String, Integer> amountAvailable = new HashMap<>();
 	double money = 0;
 	double amountFed = 0;
-
+	String choice = "";
 	private Menu menu;
+
+
+
+
 
 	public VendingMachineCLI(Menu menu) {
 		this.menu = menu;
@@ -31,21 +43,25 @@ public class VendingMachineCLI {
 
 	public void run() {
 		while (true) {
-			String choice = (String) menu.getChoiceFromOptions(MAIN_MENU_OPTIONS);
-			amountAvailable = newMap();
+			choice = (String) menu.getChoiceFromOptions(MAIN_MENU_OPTIONS);
+			newMap();
+
+
 
 			if (choice.equals(MAIN_MENU_OPTION_DISPLAY_ITEMS)) {
 				productInventory();
-
 			}
 
 
 			else if (choice.equals(MAIN_MENU_OPTION_PURCHASE)) {
 				// do purchase
-				int selection = purchaseMenu();
+				purchaseMenu();
 
-				selection = purchaseMenu();
 
+			}
+			else if (choice.equals(MAIN_MENU_OPTION_EXIT)){
+				System.out.println("Goodbye");
+				System.exit(0);
 			}
 		}
 		}
@@ -90,9 +106,12 @@ public class VendingMachineCLI {
 		while(option == 1){
 			money = feedMoney(money);
 			option = purchaseMenu();
+
 		}
 		while(option == 2){
 			productInventory();
+			System.out.printf("$" + "%.2f",money );
+			System.out.print(" available\n");
 			System.out.println("Please select an item >>> ");
 			String purchaseOption = menu.getIn().next().toUpperCase();
 			System.out.println("How many would you like to purchase >>> ");
@@ -100,8 +119,14 @@ public class VendingMachineCLI {
 			selectProduct(purchaseOption,purchaseAmount);
 			option = purchaseMenu();
 		}
-
-		return option;
+		if(option == 3) {
+			System.out.println("Dispensing change ");
+			getChange(money);
+			Menu menu = new Menu(System.in, System.out);
+			VendingMachineCLI cli = new VendingMachineCLI(menu);
+			cli.run();
+		}
+		return 0;
 	}
 
 
@@ -114,17 +139,17 @@ public class VendingMachineCLI {
 
 			amountFed += money;
 			amountOutput = amountFed + insertedMoney;
-			System.out.println("Current Money Provided: " + "$" + amountOutput);
-
-
+			System.out.println("Current Money Provided: " + "$" + amountOutput + "\n");
 
 		} catch (InputMismatchException e) {
 			System.out.println("Please enter a valid input");
 		}
+
+			InventoryLog.log(getCurrentDate() + " FEED MONEY: $" + String.format("%.2f",(double)amountFed) + " $" + String.format("%.2f",amountOutput));
 			return amountOutput;
 	}
 
-	public void selectProduct(String option, int amount){
+	public void selectProduct(String option, int amountPurchased){
 		if (!amountAvailable.containsKey(option)) {
 						System.out.println("Product does not exist.");
 						purchaseMenu();
@@ -133,15 +158,28 @@ public class VendingMachineCLI {
 						for (Map.Entry<String, Integer> newMap : amountAvailable.entrySet()) {
 
 							if (option.equalsIgnoreCase(newMap.getKey())) {
-								if (amount <= newMap().get(option)) {
-									amountAvailable.replace(option, newMap().get(option) - amount);
-									double price = itemPrice(option); //printf
+								if (amountPurchased <= amountAvailable.get(option)) {
+
+
+									double price = itemPrice(option);
 									String type = itemOutput(option);
 									String name = itemName(option);
-									money -= price*amount;
-									System.out.println(name + "|" + type + "|" + (money));
+
+
+									if(money < price){
+										System.out.println("Please insert more money to make that purchase.\n");
+									}else {
+										amountAvailable.replace(option, amountAvailable.get(option) - amountPurchased);
+										money -= price*amountPurchased;
+//									System.out.println(name + "|" + type + "|" + " Remaining balance: " +(money)); //change code to account for change.
+										System.out.printf("Dispensing: " + name + " | " + type + " | " + "Purchase amount: " + "%.2f",price*amountPurchased);
+										System.out.printf(" | " + " Remaining balance: " + "%.2f", money);
+										System.out.println("\n");
+										InventoryLog.log(getCurrentDate() + " " + name + " " + option + " $" + String.format("%.2f",(money += price*amountPurchased )) + " $" + String.format("%.2f",money -= price*amountPurchased));
+
+									}
 								} else {
-									System.out.println("There are not that many available");
+									System.out.println("There are not that many available\n");
 
 								}
 							}
@@ -151,10 +189,54 @@ public class VendingMachineCLI {
 				}
 
 
+public void getChange(double currentMoney){
+int numberOfCoins = 0;
+double initialMoney = currentMoney;
+        while (currentMoney >= QUARTERS_VALUE) {
+			currentMoney -= QUARTERS_VALUE;
+			numberOfCoins++;
+			if (currentMoney < QUARTERS_VALUE) {
+				money = currentMoney;
+				double totalQuarterAmount = numberOfCoins * QUARTERS_VALUE;
+				System.out.println("Quarters: " + numberOfCoins + " | $" + totalQuarterAmount);
+				numberOfCoins = 0;
 
+				while (currentMoney >= DIMES_VALUE) {
+					currentMoney -= DIMES_VALUE;
+					numberOfCoins++;
+					if (currentMoney < DIMES_VALUE) {
+						money = currentMoney;
+						double totalDimeAmount = numberOfCoins * DIMES_VALUE;
+						System.out.printf("Dimes: " + numberOfCoins + " | $" + "%.2f",totalDimeAmount);
+						System.out.println("");
+						numberOfCoins = 0;
+						while (currentMoney >= NICKELS_VALUE) {
+							currentMoney -= NICKELS_VALUE;
+							numberOfCoins++;
+							if (currentMoney < NICKELS_VALUE) {
+								double totalNickelAmount = numberOfCoins * NICKELS_VALUE;
+								money = currentMoney;
+								System.out.println("Nickels: " + numberOfCoins + " | $"  + totalNickelAmount);
 
+							}
+						}
+					}
 
+				}
+			}
 
+		}
+	InventoryLog.log(getCurrentDate() + " " + "GIVE CHANGE" + ": " + " $" + String.format("%.2f",(initialMoney)) + " $" + String.format("%.2f",money));
+		System.out.printf("Current balance: $" + "%.2f",money);
+		System.out.println("");
+
+		}
+
+public String getCurrentDate(){
+	SimpleDateFormat format = new SimpleDateFormat("MM/dd/yyyy hh:mm:ss a", Locale.US);
+	String dateString = format.format(new Date());
+	return dateString;
+}
 
 
 
@@ -177,7 +259,7 @@ public void setPurchaseMenuOptions() {
 }
 
 
-public Map<String, Integer> newMap(){
+public void newMap(){
 	int available = 5;
 		File vendingMenu = new File("vendingmachine.csv");
 		try (Scanner input = new Scanner(vendingMenu)) {
@@ -187,7 +269,7 @@ public Map<String, Integer> newMap(){
 		} catch (FileNotFoundException e) {
 			System.out.println("File Not Found.");
 		}
-return amountAvailable;
+
 }
 
 
@@ -242,8 +324,6 @@ public String itemOutput(String index){
 }
 
 
-
-
 public String itemName(String index){
 	File vendingMenu = new File("vendingmachine.csv");
 	String name = "";
@@ -260,29 +340,5 @@ public String itemName(String index){
 	}
 	return name;
 }
-
-//	public String itemCost(String index){
-//		File vendingMenu = new File("vendingmachine.csv");
-//		String name = "";
-//		try (Scanner input = new Scanner(vendingMenu)) {
-//			while (input.hasNextLine()) {
-//				String thisInput = input.nextLine();
-//				if(thisInput.contains(index)) {
-//					String[] purchasedItem = thisInput.split("\\|");
-//					name = purchasedItem[1];
-//				}
-//			}
-//		} catch (FileNotFoundException e) {
-//			System.out.println("File Not Found.");
-//		}
-//		return name;
-//	}
-
-
-
-
-
-
-
 
 }
